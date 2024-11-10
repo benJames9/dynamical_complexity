@@ -1,10 +1,11 @@
 import numpy as np
+import numpy.random as rn
+from iznetwork import IzNetwork
 
-class SmallWorldModularNetwork:
+class SmallWorldModularNetworkBuilder:
   """
-  Representation of a single small-world modular 
-  network that seperates the representation of inhibitory
-  and excitatory neurons
+  Builder of a small-world modular network that separates 
+  the representation of inhibitory and excitatory neurons
   """
 
   def __init__(self, M, EN, IN):
@@ -18,17 +19,11 @@ class SmallWorldModularNetwork:
 
     IN -- Number of inhibitory neurons
     """
-    pass
-  
-  def rewire(self, p):
-    """
-    Rewire the modular network
+    self._M = M
+    self._EN = EN
+    self._IN = IN
+    self._N = M * EN
 
-    Inputs:
-    p --  Probability that an excitatory neuron will be
-          rewired as an edge between communities
-    """
-    pass
 
   def setExcitatoryParameters(self, a, b, c, d):
     """
@@ -37,7 +32,14 @@ class SmallWorldModularNetwork:
     (M * EN), where M is the number of modules and EN is number of excitatory 
     neurons per module
     """
-    pass
+    if (len(a), len(b), len(c), len(d)) != (self._N, self._N, self._N, self._N):
+      raise Exception('Excitatory parameter vectors must be of size N.')
+    
+    self._exa = a
+    self._exb = b
+    self._exc = c
+    self._exd = d
+
 
   def setInhibitoryParameters(self, a, b, c, d):
     """
@@ -45,7 +47,14 @@ class SmallWorldModularNetwork:
     in Izhikevich's original paper. All inputs must be np.arrays of size 
     IN, where IN is the number of inhibitory neurons per module
     """
-    pass
+    if (len(a), len(b), len(c), len(d)) != (self._IN, self._IN, self._IN, self._IN):
+      raise Exception('Inhibitory parameter vectors must be of size N.')
+    
+    self._ina = a
+    self._inb = b
+    self._inc = c
+    self._ind = d
+
 
   def setExcitatoryToExcitatoryWeights(self, W):
     """
@@ -57,7 +66,10 @@ class SmallWorldModularNetwork:
           where M is number of modules and EN is number of 
           excitatory neurons per module
     """
-    pass
+    if W.shape != (self._N, self._N):
+      raise Exception('Excitatory to excitatory Weight matrix must be (M * EN)-by-(M * EN).')
+    self._exToExW = np.array(W)
+
 
   def setExcitatoryToInhibitoryWeights(self, W):
     """
@@ -69,7 +81,10 @@ class SmallWorldModularNetwork:
           where M is number of modules, EN is number of excitatory 
           neurons per module, and IN is the number of inhibitory neurons
     """
-    pass
+    if W.shape != (self._N, self._IN):
+      raise Exception('Excitatory to inhibitory weight matrix must be (M * EN)-by-IN.')
+    self._exToInW = np.array(W)
+
 
   def setInhibitoryToExcitatoryWeights(self, W):
     """
@@ -81,7 +96,10 @@ class SmallWorldModularNetwork:
           where M is number of modules, EN is number of excitatory 
           neurons per module, and IN is the number of inhibitory neurons
     """
-    pass
+    if W.shape != (self._IN, self._N):
+      raise Exception('Inhibitory to excitatory weight matrix must be IN-by-(M * EN).')
+    self._inToExW = np.array(W)
+
 
   def setInhibitoryToInhibitoryWeights(self, W):
     """
@@ -92,7 +110,10 @@ class SmallWorldModularNetwork:
     W --  np.array or np.matrix of size IN-by-IN
           where IN is the number of inhibitory neurons
     """
-    pass
+    if W.shape != (self._IN, self._IN):
+      raise Exception('Inhibitory to inhibitory weight matrix must be IN-by-IN.')
+    self._inToInW = np.array(W)
+
 
   def setExcitatoryToExcitatoryDelays(self, D):
     """
@@ -104,7 +125,17 @@ class SmallWorldModularNetwork:
           where M is number of modules and EN is number of 
           excitatory neurons per module
     """
-    pass
+    if D.shape != (self._N, self._N):
+      raise Exception('Excitatory to excitatory delay matrix must be (M * EN)-by-(M * EN).')
+
+    if not np.issubdtype(D.dtype, np.integer):
+      raise Exception('Delays must be integer numbers.')
+
+    if (D < 0.5).any():
+      raise Exception('Delays must be strictly positive.')
+
+    self._exToExD = D
+
 
   def setExcitatoryToInhibitoryDelays(self, D):
     """
@@ -116,7 +147,17 @@ class SmallWorldModularNetwork:
           where M is number of modules, EN is number of excitatory 
           neurons per module, and IN is the number of inhibitory neurons
     """
-    pass
+    if D.shape != (self._N, self._IN):
+      raise Exception('Excitatory to inhibitory delay matrix must be (M * EN)-by-IN.')
+
+    if not np.issubdtype(D.dtype, np.integer):
+      raise Exception('Delays must be integer numbers.')
+
+    if (D < 0.5).any():
+      raise Exception('Delays must be strictly positive.')
+
+    self._exToInD = D
+
 
   def setInhibitoryToExcitatoryDelays(self, D):
     """
@@ -128,7 +169,17 @@ class SmallWorldModularNetwork:
           where M is number of modules, EN is number of excitatory 
           neurons per module, and IN is the number of inhibitory neurons
     """
-    pass
+    if D.shape != (self._IN, self._N):
+      raise Exception('Inhibitory to excitatory delay matrix must be IN-by-(M * EN).')
+
+    if not np.issubdtype(D.dtype, np.integer):
+      raise Exception('Delays must be integer numbers.')
+
+    if (D < 0.5).any():
+      raise Exception('Delays must be strictly positive.')
+
+    self._inToExD = D
+
 
   def setInhibitoryToInhibitoryDelays(self, D):
     """
@@ -139,34 +190,72 @@ class SmallWorldModularNetwork:
     D --  np.array or np.matrix of size IN-by-IN
           where IN is the number of inhibitory neurons
     """
-    pass
+    if D.shape != (self._IN, self._IN):
+      raise Exception('Inhibitory to inhibitory delay matrix must be IN-by-IN.')
 
-  def setExcitatoryCurrent(self, I):
+    if not np.issubdtype(D.dtype, np.integer):
+      raise Exception('Delays must be integer numbers.')
+
+    if (D < 0.5).any():
+      raise Exception('Delays must be strictly positive.')
+
+    self._inToInD = D
+
+
+  def buildAndRewireNetwork(self, p, Dmax):
     """
-    Set any additional background current for excitatory neurons
+    Builds the network of Izhikevich neurons and with the excitatory
+    neurons rewired with probability p
+
+    Rewiring is only applied to the output IzNetwork (so does not change
+    the previously set parameters of this builder class)
 
     Inputs:
-    I --  np.array of size (M * EN) with each element representing 
-          additional current to that neuron for the NEXT update only
-    """
-    pass
+    p --  Probability that an excitatory neuron will be
+          rewired as an edge between communities
 
-  def setInhibitoryCurrent(self, I):
-    """
-    Set any additional background current for inhibitory neurons
+    Dmax  -- Maximum delay in all the synapses in the network, in ms. Any
+             longer delay will result in failing to deliver spikes.
 
-    Inputs:
-    I --  np.array of size IN with each element representing additional 
-          current to that neuron for the NEXT update only
+    Returns:
+    IzNetwork -- A network with the set parameters
     """
-    pass
+    exToExW = self._exToExW.copy()
 
-  def update(self):
-    """
-    Simulate one millisecond of network activity (Euler method used)
+    # Rewire intra-community excitatory edges with probability p
+    for m in range(self._M):
+      for i in range(self._EN):
+        for e in range(self._EN):
+          if rn.rand() < p:
+            targetM = (m + rn.randint(0, self._M)) % self._M # New module (excluding current)
+            targetN = np.randint(0, self._EN)
 
-    Returns the indices of the excitatory neurons that fired this 
-    millisecond. Neurons are ordered so that consecutive indices
-    represent modules.
-    """
-    pass
+            # Compute current and target indices
+            currIndex = (m * self._EN) + i
+            oldTargetIndex = (m * self._EN) + e
+            newTargetIndex = (targetM * self._EN) + targetN
+
+            # Rewire
+            exToExW[currIndex, newTargetIndex] = exToExW[currIndex, oldTargetIndex]
+            exToExW[currIndex, oldTargetIndex] = 0
+
+    # Combine weights and delays into single network as follows:
+    #  | ExToEx ExToIn |
+    #  | InToEx InToIn | 
+    W = np.block([[self._exToExW, self._exToInW], [self._inToExW, self._inToInW]])
+    D = np.block([[self._exToExD, self._exToInD], [self._inToExD, self._inToInD]])
+    
+    # Combine parameters
+    a = np.vstack((self._exa, self._ina))
+    b = np.vstack((self._exb, self._inb))
+    c = np.vstack((self._exc, self._inc))
+    d = np.vstack((self._exd, self._ind))
+
+    # Build network
+    network = IzNetwork((self._M * self._EN) + self._IN, Dmax)
+    network.setWeights(W)
+    network.setDelays(D)
+    network.setParameters(a, b, c, d)
+
+    return network
+  
