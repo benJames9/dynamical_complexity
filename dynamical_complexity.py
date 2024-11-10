@@ -228,7 +228,7 @@ class SmallWorldModularNetworkBuilder:
         for e in range(self._EN):
           if rn.rand() < p:
             targetM = (m + rn.randint(0, self._M)) % self._M # New module (excluding current)
-            targetN = np.randint(0, self._EN)
+            targetN = rn.randint(0, self._EN)
 
             # Compute current and target indices
             currIndex = (m * self._EN) + i
@@ -259,3 +259,154 @@ class SmallWorldModularNetworkBuilder:
 
     return network
   
+
+
+### Experiment-specific network construction functions
+
+# Excitatory to excitatory weights
+def computeExToExWeights(M, EN):
+  """
+  Inputs:
+  M --  Number of modules
+  
+  EN -- Number of neurons per module
+
+  Returns:
+  np.matrix of shape (M * EN)-by-(M * EN)
+  """
+  exToExW = np.zeros(((M * EN), (M * EN)))
+  for m in range(M):
+    connections = set()
+
+    # 1000 random edges per module
+    while len(connections) < 1000:
+      base = rn.randint(0, 100)
+      target = rn.randint(0, 100)
+
+      # Prevent symmetric connections
+      if base != target and (target, base) not in connections:
+        connections.add((base, target))
+
+    # Create edges with weight 1 and sf 17
+    for (base, target) in connections:
+      exToExW[(m * EN) + base, (m * EN) + target] = 17
+
+  return exToExW
+
+
+# Excitatory to inhibitory weights
+def computeExToInWeights(M, EN, IN):
+  """
+  Inputs:
+  M --  Number of modules
+
+  EN -- Number of excitatory neurons per module
+
+  IN -- Number of inhibitory neurons
+
+  Returns:
+  np.matrix of shape (M * EN)-by-IN
+  """
+  exToInW = np.zeros(((M * EN), IN))
+  for i in range(IN):
+
+    # Focal - 4 excitatory all from same module
+    baseM = rn.randint(0, 8)
+    baseNs = rn.randint(0, 100, size=4)
+
+    exToInW[(baseM * EN) + baseNs, i] = rn.uniform(0, 50)
+  
+  return exToInW
+
+
+# Inhibitory to excitatory weights
+def computeInToExWeights(M, EN, IN):
+  """
+  Inputs:
+  M --  Number of modules
+
+  EN -- Number of excitatory neurons per module
+
+  IN -- Number of inhibitory neurons
+
+  Returns: 
+  np.matrix of shape IN-by-(M * EN)
+  """
+  return rn.uniform(-2, 0, size=(IN, (M * EN)))
+
+
+# Inhibitory to inhibitory weights
+def computeInToInWeights(IN):
+  """
+  Inputs:
+  IN -- Number of inhibitory neurons
+
+  Returns:
+  np.matrix of shape IN-by-IN
+  """
+  return rn.uniform(-1, 0, size=(IN, IN))
+
+
+# Excitatory to excitatory delays
+def computeExToExDelays(M, EN):
+  """
+  Inputs:
+  M --  Number of modules
+  
+  EN -- Number of neurons per module
+
+  Returns:
+  np.matrix of shape (M * EN)-by-(M * EN)
+  """
+  return rn.randint(1, 21, size=((M * EN), (M * EN)))
+
+
+# Excitatory to inhibitory delays
+def computeExToInWeights(M, EN, IN):
+  """
+  Inputs:
+  M --  Number of modules
+
+  EN -- Number of excitatory neurons per module
+
+  IN -- Number of inhibitory neurons
+
+  Returns:
+  np.matrix of shape (M * EN)-by-IN
+  """
+  return np.ones(((M * EN), IN))
+
+
+# Inhibitory to excitatory weights
+def computeInToExWeights(M, EN, IN):
+  """
+  Inputs:
+  M --  Number of modules
+
+  EN -- Number of excitatory neurons per module
+
+  IN -- Number of inhibitory neurons
+
+  Returns: 
+  np.matrix of shape IN-by-(M * EN)
+  """
+  return np.ones((IN, (M * EN)))
+
+
+# Inhibitory to inhibitory weights
+def computeInToInWeights(IN):
+  """
+  Inputs:
+  IN -- Number of inhibitory neurons
+
+  Returns:
+  np.matrix of shape IN-by-IN
+  """
+  return np.ones((IN, IN))
+
+
+### Experiment-specific network construction
+
+M = 8
+EN = 100
+IN = 200
