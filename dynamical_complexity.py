@@ -278,8 +278,7 @@ class SmallWorldModularNetworkBuilder:
     plt.imshow(weights, cmap="hot")
     plt.title(f"Connection Matrix, p={p}")
     plt.colorbar(label="Connection weight")
-    # plt.savefig(f"img/connectivity_p_{p}.svg")
-    plt.show()
+    plt.savefig(f"img/connectivity_p_{p}.svg")
 
 
 def generate_plots(network, p):
@@ -322,8 +321,7 @@ def generate_raster_plot(firings):
   plt.title(f"Neuron Firings, p={p}")
   plt.xlabel("Time (ms)")
   plt.ylabel("Neuron index")
-  # plt.savefig(f"img/firing_p_{p}.svg")
-  plt.show()
+  plt.savefig(f"img/firing_p_{p}.svg")
 
 
 def generate_mean_firing_rate_plot(firing_counts, p):
@@ -358,8 +356,7 @@ def generate_mean_firing_rate_plot(firing_counts, p):
   plt.xlabel("Time (ms)")
   plt.ylabel("Mean Firing Rate")
   plt.legend()
-  # plt.savefig(f"img/mean_p_{p}.svg")
-  plt.show()
+  plt.savefig(f"img/mean_p_{p}.svg")
 
 ### Experiment-specific network construction
 
