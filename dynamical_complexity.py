@@ -262,17 +262,24 @@ class SmallWorldModularNetworkBuilder:
     network.setDelays(D)
     network.setParameters(a, b, c, d)
 
-    # self.generate_matrix_connectivity_plot(p, exToExW)
+    self.generate_matrix_connectivity_plot(p, exToExW)
 
     return network
   
   def generate_matrix_connectivity_plot(self, p, weights):
+    """
+    Generate a plot of the connection matrix
+
+    Inputs:
+    p       -- Rewiring probability
+    weights -- Connection matrix
+    """
     plt.figure(figsize=(12, 4))
-    plt.imshow(weights)
+    plt.imshow(weights, cmap="hot")
     plt.title(f"Connection Matrix, p={p}")
     plt.colorbar(label="Connection weight")
-    plt.show()
     # plt.savefig(f"img/connectivity_p_{p}.svg")
+    plt.show()
 
 
 def generate_plots(network, p):
@@ -288,7 +295,6 @@ def generate_plots(network, p):
 
   # Run simulation for 1000 ms
   for t in range(milliseconds):
-    # Simulate background firing
     poisson_spikes = rn.poisson(0.01, network._N)
     extra_current = 15.0 * (poisson_spikes > 0)
     network.setCurrent(extra_current)
@@ -299,7 +305,7 @@ def generate_plots(network, p):
       if n < M * EN:
         firing_counts[n, t] = 1
     
-  # generate_raster_plot(firing_counts)
+  generate_raster_plot(firing_counts)
   generate_mean_firing_rate_plot(firing_counts, p)
 
 
@@ -316,8 +322,8 @@ def generate_raster_plot(firings):
   plt.title(f"Neuron Firings, p={p}")
   plt.xlabel("Time (ms)")
   plt.ylabel("Neuron index")
-  plt.show()
   # plt.savefig(f"img/firing_p_{p}.svg")
+  plt.show()
 
 
 def generate_mean_firing_rate_plot(firing_counts, p):
@@ -352,16 +358,14 @@ def generate_mean_firing_rate_plot(firing_counts, p):
   plt.xlabel("Time (ms)")
   plt.ylabel("Mean Firing Rate")
   plt.legend()
-  plt.show()
   # plt.savefig(f"img/mean_p_{p}.svg")
-
+  plt.show()
 
 ### Experiment-specific network construction
 
 M = 8
 EN = 100
 IN = 200
-
 
 ## Excitatory to excitatory weights
 exToExW = np.zeros(((M * EN), (M * EN)))
@@ -399,7 +403,6 @@ for i in range(0, M * EN - 4, 4):
 ## Inhibitory to excitatory weights
 inToExW = rn.uniform(-2, 0, size=(IN, (M * EN)))
 
-
 ## Inhibitory to inhibitory weights
 inToInW = rn.uniform(-1, 0, size=(IN, IN))
 for i in range(IN):
@@ -408,18 +411,14 @@ for i in range(IN):
 ## Excitatory to excitatory delays (rand)
 exToExD = rn.randint(1, 21, size=((M * EN), (M * EN)))
 
-
 ## Excitatory to inhibitory delays
 exToInD = np.ones(((M * EN), IN), dtype=np.int32)
-
 
 ## Inhibitory to excitatory weights
 inToExD = np.ones((IN, (M * EN)), dtype=np.int32)
 
-
 ## Inhibitory to inhibitory delays
 inToInD = np.ones((IN, IN), dtype=np.int32)
-
 
 ## Excitatory parameters
 exa = 0.02 * np.ones(M * EN, dtype=np.int32)
@@ -432,7 +431,6 @@ ina = 0.02 * np.ones(IN, dtype=np.int32)
 inb = 0.25 * np.ones(IN, dtype=np.int32)
 inc = -65 * np.ones(IN, dtype=np.int32)
 ind = 2 * np.ones(IN, dtype=np.int32)
-
 
 ## Construct network builder
 builder = SmallWorldModularNetworkBuilder(M, EN, IN)
@@ -447,10 +445,8 @@ builder.setInhibitoryToInhibitoryDelays(inToInD)
 builder.setExcitatoryParameters(exa, exb, exc, exd)
 builder.setInhibitoryParameters(ina, inb, inc, ind)
 
-
 ## Generate plots for different rewiring probabilities
 ps = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
-# ps = [0]
 for p in ps:
   network = builder.buildAndRewireNetwork(p, 20)
   generate_plots(network, p)
