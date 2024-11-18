@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.random as rn
 from iznetwork import IzNetwork
+import matplotlib.pyplot as plt
 
 class SmallWorldModularNetworkBuilder:
   """
@@ -225,14 +226,18 @@ class SmallWorldModularNetworkBuilder:
     # Rewire intra-community excitatory edges with probability p
     for m in range(self._M):
       for i in range(self._EN):
-        for e in range(self._EN):
+        for j in range(self._EN):
+          currIndex = (m * self._EN) + i
+          oldTargetIndex = (m * self._EN) + j
+
+          # Check that there is an edge to rewire
+          if exToExW[currIndex, oldTargetIndex] == 0:
+            continue
+
           if rn.rand() < p:
             targetM = (m + rn.randint(0, self._M)) % self._M # New module (excluding current)
             targetN = rn.randint(0, self._EN)
 
-            # Compute current and target indices
-            currIndex = (m * self._EN) + i
-            oldTargetIndex = (m * self._EN) + e
             newTargetIndex = (targetM * self._EN) + targetN
 
             # Rewire
@@ -242,14 +247,14 @@ class SmallWorldModularNetworkBuilder:
     # Combine weights and delays into single network as follows:
     #  | ExToEx ExToIn |
     #  | InToEx InToIn | 
-    W = np.block([[self._exToExW, self._exToInW], [self._inToExW, self._inToInW]])
+    W = np.block([[exToExW, self._exToInW], [self._inToExW, self._inToInW]])
     D = np.block([[self._exToExD, self._exToInD], [self._inToExD, self._inToInD]])
     
     # Combine parameters
-    a = np.vstack((self._exa, self._ina))
-    b = np.vstack((self._exb, self._inb))
-    c = np.vstack((self._exc, self._inc))
-    d = np.vstack((self._exd, self._ind))
+    a = np.concatenate((self._exa, self._ina))
+    b = np.concatenate((self._exb, self._inb))
+    c = np.concatenate((self._exc, self._inc))
+    d = np.concatenate((self._exd, self._ind))
 
     # Build network
     network = IzNetwork((self._M * self._EN) + self._IN, Dmax)
@@ -257,8 +262,98 @@ class SmallWorldModularNetworkBuilder:
     network.setDelays(D)
     network.setParameters(a, b, c, d)
 
+    # self.generate_matrix_connectivity_plot(p, exToExW)
+
     return network
   
+  def generate_matrix_connectivity_plot(self, p, weights):
+    plt.figure(figsize=(12, 4))
+    plt.imshow(weights)
+    plt.title(f"Connection Matrix, p={p}")
+    plt.colorbar(label="Connection weight")
+    plt.show()
+    # plt.savefig(f"img/connectivity_p_{p}.svg")
+
+
+def generate_plots(network, p):
+  """
+  Generate a raster plot and mean firing rate plot of the network
+
+  Inputs:
+  network -- IzNetwork object
+  p       -- Rewiring probability
+  """
+  milliseconds = 1000
+  firing_counts = np.zeros((M * EN, milliseconds))
+
+  # Run simulation for 1000 ms
+  for t in range(milliseconds):
+    # Simulate background firing
+    poisson_spikes = rn.poisson(0.01, network._N)
+    extra_current = 15.0 * (poisson_spikes > 0)
+    network.setCurrent(extra_current)
+
+    fired_neurons = network.update()
+
+    for n in fired_neurons:
+      if n < M * EN:
+        firing_counts[n, t] = 1
+    
+  # generate_raster_plot(firing_counts)
+  generate_mean_firing_rate_plot(firing_counts, p)
+
+
+def generate_raster_plot(firings):
+  """
+  Generate a raster plot of the network
+
+  Inputs:
+  firings -- List of tuples (time, neuron index) of when a neuron fired
+  """
+  plt.figure(figsize=(12, 4))
+  neurons, times = np.nonzero(firings)
+  plt.scatter(times, neurons, c="blue")
+  plt.title(f"Neuron Firings, p={p}")
+  plt.xlabel("Time (ms)")
+  plt.ylabel("Neuron index")
+  plt.show()
+  # plt.savefig(f"img/firing_p_{p}.svg")
+
+
+def generate_mean_firing_rate_plot(firing_counts, p):
+  """
+  Generate a mean firing rate plot of the network
+
+  Inputs:
+  firing_counts -- 2D np.array of size (M * EN)-by-1000
+                   where M is number of modules and EN is number of 
+                   excitatory neurons per module
+  p             -- Rewiring probability
+  """
+  window_size = 50
+  shift = 20
+  module_firing_rates = []
+
+  for module in range(M):
+    module_indices = np.arange(module * EN, (module + 1) * EN)
+    module_firing_rate = []
+    for t in range(0, 1000 - window_size + 1, shift):
+      window = firing_counts[module_indices, t:t + window_size]
+      module_firing_rate.append(np.count_nonzero(window) / window_size)
+    module_firing_rates.append(module_firing_rate)
+
+  # Plot mean firing rates
+  time_periods = np.arange(0, 1000 - window_size + 1, shift)
+
+  plt.figure(figsize=(12, 4))
+  for module, rates in enumerate(module_firing_rates):
+      plt.plot(time_periods, rates, label=f"Module {module}")
+  plt.title(f"Mean Firing Rates, p={p}")
+  plt.xlabel("Time (ms)")
+  plt.ylabel("Mean Firing Rate")
+  plt.legend()
+  plt.show()
+  # plt.savefig(f"img/mean_p_{p}.svg")
 
 
 ### Experiment-specific network construction
@@ -275,28 +370,30 @@ for m in range(M):
 
   # 1000 random edges per module
   while len(connections) < 1000:
-    base = rn.randint(0, 100)
-    target = rn.randint(0, 100)
+    source = rn.randint(0, EN)
+    target = rn.randint(0, EN)
 
     # Prevent symmetric connections
-    if base != target and (target, base) not in connections:
-      connections.add((base, target))
+    if source != target and (target, source) not in connections:
+      connections.add((source, target))
 
   # Create edges with weight 1 and sf 17
-  for (base, target) in connections:
-    exToExW[(m * EN) + base, (m * EN) + target] = 17
+  for (source, target) in connections:
+    exToExW[(m * EN) + source, (m * EN) + target] = 17
 
 
 ## Excitatory to inhibitory weights
 exToInW = np.zeros(((M * EN), IN))
-for i in range(IN):
+connected_inhibitory = set()
+for i in range(0, M * EN - 4, 4):
+  targetN = rn.randint(0, IN)
+  while targetN in connected_inhibitory:
+    targetN = rn.randint(0, IN)
 
-  # Focal - 4 excitatory all from same module
-  baseM = rn.randint(0, 8)
-  baseNs = rn.randint(0, 100, size=4)
+  connected_inhibitory.add(targetN)
 
   # Weight 0-1, sf of 50
-  exToInW[(baseM * EN) + baseNs, i] = rn.uniform(0, 50)
+  exToInW[i:i+4, targetN] = rn.uniform(0, 50)
 
 
 ## Inhibitory to excitatory weights
@@ -305,36 +402,36 @@ inToExW = rn.uniform(-2, 0, size=(IN, (M * EN)))
 
 ## Inhibitory to inhibitory weights
 inToInW = rn.uniform(-1, 0, size=(IN, IN))
-
+for i in range(IN):
+  inToInW[i, i] = 0
 
 ## Excitatory to excitatory delays (rand)
 exToExD = rn.randint(1, 21, size=((M * EN), (M * EN)))
 
 
 ## Excitatory to inhibitory delays
-exToInD = np.ones(((M * EN), IN))
+exToInD = np.ones(((M * EN), IN), dtype=np.int32)
 
 
 ## Inhibitory to excitatory weights
-inToExD = np.ones((IN, (M * EN)))
+inToExD = np.ones((IN, (M * EN)), dtype=np.int32)
 
 
 ## Inhibitory to inhibitory delays
-inToInD = np.ones((IN, IN))
+inToInD = np.ones((IN, IN), dtype=np.int32)
 
 
 ## Excitatory parameters
-exa = 0.02 * np.ones(M * EN)
-exb = 0.2 * np.ones(M * EN)
-exc = -65 * np.ones(M * EN)
-exd = 8 * np.ones(M * EN)
-
+exa = 0.02 * np.ones(M * EN, dtype=np.int32)
+exb = 0.2 * np.ones(M * EN, dtype=np.int32)
+exc = -65 * np.ones(M * EN, dtype=np.int32)
+exd = 8 * np.ones(M * EN, dtype=np.int32)
 
 ## Inhibitory parameters
-ina = 0.02 * np.ones(IN)
-inb = 0.25 * np.ones(IN)
-inc = -65 * np.ones(IN)
-ind = 2 * np.ones(IN)
+ina = 0.02 * np.ones(IN, dtype=np.int32)
+inb = 0.25 * np.ones(IN, dtype=np.int32)
+inc = -65 * np.ones(IN, dtype=np.int32)
+ind = 2 * np.ones(IN, dtype=np.int32)
 
 
 ## Construct network builder
@@ -348,8 +445,12 @@ builder.setExcitatoryToInhibitoryDelays(exToInD)
 builder.setInhibitoryToExcitatoryDelays(inToExD)
 builder.setInhibitoryToInhibitoryDelays(inToInD)
 builder.setExcitatoryParameters(exa, exb, exc, exd)
-builder.setExcitatoryParameters(ina, inb, inc, ind)
+builder.setInhibitoryParameters(ina, inb, inc, ind)
 
 
-## Network with p=0.1
-network1 = builder.buildAndRewireNetwork(0.1, 100)
+## Generate plots for different rewiring probabilities
+ps = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+# ps = [0]
+for p in ps:
+  network = builder.buildAndRewireNetwork(p, 20)
+  generate_plots(network, p)
